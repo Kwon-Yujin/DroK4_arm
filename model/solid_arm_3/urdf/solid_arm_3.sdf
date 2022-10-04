@@ -1,0 +1,343 @@
+<sdf version='1.6'>
+  <model name='solid_arm_3'>
+    <link name='base_link'>
+      <pose frame=''>0 0 0 0 -0 0</pose>
+      <inertial>
+        <pose frame=''>0 -0.034736 0.009937 0 -0 0</pose>
+        <mass>300</mass>
+        <inertia>
+          <ixx>0.00130137</ixx>
+          <ixy>-3.2503e-14</ixy>
+          <ixz>-1.25315e-16</ixz>
+          <iyy>0.000611256</iyy>
+          <iyz>7.97483e-07</iyz>
+          <izz>0.00188833</izz>
+        </inertia>
+      </inertial>
+      <collision name='base_link_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/base_link.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='base_link_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/base_link.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <link name='link_1'>
+      <pose frame=''>0 0 -0.000272 1.5708 -0 1.5708</pose>
+      <inertial>
+        <pose frame=''>-0 0.093575 0.003489 0 -0 0</pose>
+        <mass>0.8</mass>
+        <inertia>
+          <ixx>0.00445492</ixx>
+          <ixy>5.79947e-09</ixy>
+          <ixz>1.56221e-09</ixz>
+          <iyy>0.00348291</iyy>
+          <iyz>-0.000197414</iyz>
+          <izz>0.00329382</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_1_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_1.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_1_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_1.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_1' type='revolute'>
+      <child>link_1</child>
+      <parent>base_link</parent>
+      <axis>
+        <xyz>-0 0 -1</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+    <link name='link_2'>
+      <pose frame=''>0 0 0.160693 3.14159 -0 -1.5708</pose>
+      <inertial>
+        <pose frame=''>0.215408 -0.005552 -0.000358 0 -0 0</pose>
+        <mass>1.2</mass>
+        <inertia>
+          <ixx>0.00164764</ixx>
+          <ixy>-0.00156682</ixy>
+          <ixz>-1.59251e-05</ixz>
+          <iyy>0.0812874</iyy>
+          <iyz>-1.52329e-05</iyz>
+          <izz>0.0814959</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_2_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_2.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_2_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_2.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_2' type='revolute'>
+      <child>link_2</child>
+      <parent>link_1</parent>
+      <axis>
+        <xyz>1 0 -0</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+    <link name='link_3'>
+      <pose frame=''>0 -0.604997 0.162742 -0 0 1.5708</pose>
+      <inertial>
+        <pose frame=''>0.19005 0.000208 0.073463 0 -0 0</pose>
+        <mass>0.7</mass>
+        <inertia>
+          <ixx>0.00415627</ixx>
+          <ixy>2.31977e-06</ixy>
+          <ixz>-0.00498939</ixz>
+          <iyy>0.0637242</iyy>
+          <iyz>-1.4468e-07</iyz>
+          <izz>0.0628452</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_3_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_3.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_3_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_3.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_3' type='revolute'>
+      <child>link_3</child>
+      <parent>link_2</parent>
+      <axis>
+        <xyz>-1 -0 -0</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+    <link name='link_4'>
+      <pose frame=''>0 -0.098 0.257742 -0 -0 0</pose>
+      <inertial>
+        <pose frame=''>0.019507 0.079919 -0.005563 0 -0 0</pose>
+        <mass>0.4</mass>
+        <inertia>
+          <ixx>0.00115088</ixx>
+          <ixy>-3.72011e-05</ixy>
+          <ixz>1.33604e-05</ixz>
+          <iyy>0.000610658</iyy>
+          <iyz>3.16981e-05</iyz>
+          <izz>0.00112721</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_4_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_4.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_4_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_4.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_4' type='revolute'>
+      <child>link_4</child>
+      <parent>link_3</parent>
+      <axis>
+        <xyz>-0 1 -0</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+    <link name='link_5'>
+      <pose frame=''>0 -0.002093 0.257742 -0 0 1.5708</pose>
+      <inertial>
+        <pose frame=''>0.064868 0.007142 -0.006547 0 -0 0</pose>
+        <mass>0.3</mass>
+        <inertia>
+          <ixx>0.00066232</ixx>
+          <ixy>0.000164061</ixy>
+          <ixz>3.4013e-05</ixz>
+          <iyy>0.000828482</iyy>
+          <iyz>-1.47763e-05</iyz>
+          <izz>0.000974256</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_5_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_5.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_5_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_5.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_5' type='revolute'>
+      <child>link_5</child>
+      <parent>link_4</parent>
+      <axis>
+        <xyz>1 0 0</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+    <link name='link_6'>
+      <pose frame=''>0 0.106717 0.255728 -1.57079 -1.57079 -1.5708</pose>
+      <inertial>
+        <pose frame=''>-0.000217 0.004931 -7e-06 0 -0 0</pose>
+        <mass>0.2</mass>
+        <inertia>
+          <ixx>1.20905e-05</ixx>
+          <ixy>3.34247e-08</ixy>
+          <ixz>-9.39864e-21</ixz>
+          <iyy>2.34023e-05</iyy>
+          <iyz>-5.34321e-22</iyz>
+          <izz>1.19313e-05</izz>
+        </inertia>
+      </inertial>
+      <collision name='link_6_collision'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_6.STL</uri>
+          </mesh>
+        </geometry>
+      </collision>
+      <visual name='link_6_visual'>
+        <pose frame=''>0 0 0 0 -0 0</pose>
+        <geometry>
+          <mesh>
+            <scale>1 1 1</scale>
+            <uri>model://solid_arm_3/meshes/link_6.STL</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+    <joint name='joint_6' type='revolute'>
+      <child>link_6</child>
+      <parent>link_5</parent>
+      <axis>
+        <xyz>-4e-06 1 4e-06</xyz>
+        <limit>
+          <lower>0</lower>
+          <upper>0</upper>
+          <effort>0</effort>
+          <velocity>0</velocity>
+        </limit>
+        <dynamics>
+          <spring_reference>0</spring_reference>
+          <spring_stiffness>0</spring_stiffness>
+        </dynamics>
+        <use_parent_model_frame>1</use_parent_model_frame>
+      </axis>
+    </joint>
+  </model>
+</sdf>
