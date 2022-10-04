@@ -77,12 +77,19 @@ typedef struct _AngleAxis {
 } AngleAxis;
 AngleAxis a_axis;
 
-typedef struct Joystick {
-    float x;
-    float y;
-    float z;
+typedef struct Joystick_ {
+    double x;
+    double y;
+    double z;
 } Joystick;
 Joystick joy;
+
+typedef struct Orientation_ {
+    double roll;
+    double pitch;
+    double yaw;
+} Orientation;
+Orientation ori;
 
 //Global variables declaration//
 //Time variables, 1 - cos 제어를 위해 선언
@@ -275,9 +282,9 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
         joy.z = msg->axes[4] * 0.0005;
     }
     else if (angle_set == true) {
-        joy.x = msg->axes[1] * 0.1 * D2R;
-        joy.y = msg->axes[0] * -0.1 * D2R;
-        joy.z = msg->axes[4] * 0.1 * D2R;
+        ori.roll += msg->axes[1] * 0.1 * D2R;
+        ori.pitch += msg->axes[0] * -0.1 * D2R;
+        ori.yaw += msg->axes[4] * 0.1 * D2R;
     }
 
     //cout << "homing = " << homing << endl;
@@ -291,9 +298,6 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
 //------------------------------------------------------------//
 AngleAxis rotMatToAngleAxis(MatrixXd C)
 {
-    //Input : A rotation matrix C
-    //Output : The rotational vector which describes the rotation C
-
     AngleAxis a_axis;
     Vector3d n;
     double th;
@@ -395,7 +399,8 @@ MatrixXd RpyToRotMat(double roll, double pitch, double yaw)
     AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
     AngleAxisd yawAngle(yaw, Eigen::Vector3d::UnitZ());
 
-    Quaterniond q = rollAngle * pitchAngle * yawAngle;
+    //Quaterniond q = rollAngle * pitchAngle * yawAngle;
+    Quaterniond q = yawAngle * pitchAngle * rollAngle;
     rotMat = q.toRotationMatrix();
 
     return rotMat;
@@ -1116,6 +1121,9 @@ void gazebo::drok4_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf
     q_goal << 0, 0, 0, 0, 0, 0;
     q_present << 0, 0, 0, 0, 0, 0;
     q_command << 0, 0, 0, 0, 0, 0;
+    ori.roll = 0;
+    ori.pitch = 0;
+    ori.yaw = 0;
 
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&drok4_plugin::UpdateAlgorithm, this));
 
@@ -1230,10 +1238,14 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             //Rotation control
             start_posi = goal_posi;
             start_rot = goal_rot;
-            goal_rot = start_rot * RpyToRotMat(joy.x, joy.y, joy.z);
+            goal_rot = EulerZyxToRotMat(ori.yaw, ori.pitch, ori.roll);
+            //goal_rot = RpyToRotMat(ori.roll, ori.pitch, ori.yaw);
+            C_err = goal_rot * start_rot.transpose();
+            a_axis = rotMatToAngleAxis(C_err);
+            //goal_rot = start_rot * RpyToRotMat(joy.x, joy.y, joy.z);
             //goal_rot = start_rot * EulerZyxToRotMat(joy.z, joy.y, joy.x);
             command_posi = goal_posi;
-            command_rot = goal_rot;
+            command_rot = start_rot * angleAxisToRotMat(a_axis);
             q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
             q0 = q_command;
         }
@@ -1638,16 +1650,16 @@ void gazebo::drok4_plugin::SetJointPIDgain()
     joint[J1].Kp = 1500;
     joint[J2].Kp = 15000;//300;//200;//125;     //가장 부하가 많이 걸리는 관절
     joint[J3].Kp = 10000;//300;//200;//155;    //가장 부하가 많이 걸리는 관절 2
-    joint[J4].Kp = 25;//15;
-    joint[J5].Kp = 100;//25;//15;
-    joint[J6].Kp = 10;
+    joint[J4].Kp = 50;//25;//15;
+    joint[J5].Kp = 150;//100;//25;//15;
+    joint[J6].Kp = 10;//10;
 
     joint[J1].Kd = 0.065;
     joint[J2].Kd = 80;//0.120;//0.300;//0.200;//0.130;
     joint[J3].Kd = 30;//0.135;//0.300;//0.200;//0.165;
-    joint[J4].Kd = 0.020;
-    joint[J5].Kd = 0.100;//0.010;
-    joint[J6].Kd = 0.005;
+    joint[J4].Kd = 0.02;//0.020;
+    joint[J5].Kd = 0.05;//0.100;//0.010;
+    joint[J6].Kd = 0.005;//0.005;
 
 }
 
