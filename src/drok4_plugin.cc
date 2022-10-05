@@ -75,22 +75,22 @@ using namespace std;
 typedef struct _AngleAxis {
     Vector3d n;
     double th;
-} AngleAxis;
-AngleAxis a_axis;
+} AngleAxis_;
+AngleAxis_ a_axis;
 
-typedef struct Joystick_ {
+typedef struct _Joystick {
     double x;
     double y;
     double z;
-} Joystick;
-Joystick joy;
+} Joystick_;
+Joystick_ joy;
 
-typedef struct Orientation_ {
+typedef struct _Orientation {
     double roll;
     double pitch;
     double yaw;
-} Orientation;
-Orientation ori;
+} Orientation_;
+Orientation_ ori;
 
 //Global variables declaration//
 //Time variables, 1 - cos 제어를 위해 선언
@@ -355,9 +355,9 @@ void gazebo::drok4_plugin::JoyCallback(const sensor_msgs::Joy::ConstPtr &msg)
 //------------------------------------------------------------//
 // Transformation functions between orientation expressions
 //------------------------------------------------------------//
-AngleAxis RotMatToAngleAxis(MatrixXd C)
+AngleAxis_ RotMatToAngleAxis(MatrixXd C)
 {
-    AngleAxis a_axis;
+    AngleAxis_ a_axis;
     Vector3d n;
     double th;
 
@@ -381,7 +381,7 @@ AngleAxis RotMatToAngleAxis(MatrixXd C)
     return a_axis;
 }
 
-MatrixXd AngleAxisToRotMat(AngleAxis a_axis)
+MatrixXd AngleAxisToRotMat(AngleAxis_ a_axis)
 {
     MatrixXd C(3, 3);
     Vector3d n = a_axis.n;
@@ -401,30 +401,16 @@ MatrixXd AngleAxisToRotMat(AngleAxis a_axis)
     return C;
 }
 
-VectorXd RotMatToEuler(MatrixXd rotMat)
+VectorXd RotMatToEulerZyx(MatrixXd C)
 {
-    //회전 행렬을 Euler ZYX로 변환 (1)
-    double c11 = rotMat(0, 0), c21 = rotMat(1, 0), c31 = rotMat(2, 0),\
-            c32 = rotMat(2, 1), c33 = rotMat(2, 2);
-
-    //VectorXd euler_m = VectorXd::Zero(3);       //Initialize vector, ola 코드 참고
-    VectorXd euler_m(3);
-    euler_m(0) = atan2(c21, c11);
-    euler_m(1) = atan2(-c31, sqrt(pow(c32, 2) + pow(c33, 2)));
-    euler_m(2) = atan2(c32, c33);
-
-    return euler_m;
-
-    //회전 행렬을 Euler ZYX로 변환 (2)
-    /*
+    //회전 행렬을 Euler ZYX로 변환
     VectorXd euler_zyx = VectorXd::Zero(3);
 
-    euler_zyx(0) = atan2(rotMat(1, 0), rotMat(0, 0));
-    euler_zyx(1) = atan2(-rotMat(2, 0), sqrt(pow(rotMat(2, 1), 2) + pow(rotMat(2, 2), 2)));
-    euler_zyx(2) = atan2(rotMat(2, 1), rotMat(2, 2));
+    euler_zyx(0) = atan2(C(1, 0), C(0, 0));
+    euler_zyx(1) = atan2(-C(2, 0), sqrt(pow(C(2, 1), 2) + pow(C(2, 2), 2)));
+    euler_zyx(2) = atan2(C(2, 1), C(2, 2));
 
     return euler_zyx;
-    */
 }
 
 MatrixXd EulerZyxToRotMat(double z_rot, double y_rot, double x_rot)
@@ -452,7 +438,7 @@ MatrixXd RpyToRotMat(double roll, double pitch, double yaw)
 {
     using namespace Eigen;
     cout << "\nroll : " << roll*R2D << "\npitch : " << pitch*R2D << "\nyaw : " << yaw*R2D << endl;
-    MatrixXd rotMat(3, 3);
+    MatrixXd C(3, 3);
 
     AngleAxisd rollAngle(roll, Eigen::Vector3d::UnitX());
     AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
@@ -460,9 +446,34 @@ MatrixXd RpyToRotMat(double roll, double pitch, double yaw)
 
     Quaterniond q = rollAngle * pitchAngle * yawAngle;
     //Quaterniond q = yawAngle * pitchAngle * rollAngle;
-    rotMat = q.toRotationMatrix();
+    C = q.toRotationMatrix();
 
-    return rotMat;
+    return C;
+}
+
+VectorXd RotMatToRotVec(MatrixXd C)
+{
+    //Input: a rotation matrix C
+    //Output: the rotational vector which describes the rotation C
+    VectorXd phi(3), n(3);
+    double th;
+
+    th = acos((C(0, 0) + C(1, 1) + C(2, 2) - 1) / 2);
+    if(fabs(th) < 0.001)
+    {
+         n << 0, 0, 0;
+    }
+    else
+    {
+        n << (C(2, 1) - C(1, 2)),\
+                (C(0, 2) - C(2, 0)),\
+                (C(1, 0) - C(0, 1));
+        n = (1 / (2 * sin(th))) * n;
+    }
+
+    phi = th * n;
+
+    return phi;
 }
 
 /*
@@ -504,16 +515,14 @@ MatrixXd GetTransformI0(void)
     MatrixXd htmI0 = MatrixXd::Identity(4, 4);
     
     return htmI0;
-    
-    //Variable way to enter matrix formation : 
 }
 
 MatrixXd JointToTransform01(VectorXd q)
 {
-    //Base link frame to hip yaw link frame
-    //q = generalized coordinates, q = [q1; q2; q3; q4; q5; q6]
-    //q(0) = angle of joint 1
-    
+    //Base link frame to joint 1 frame
+    //q : Generalized coordinates, q = [q1; q2; q3; q4; q5; q6]
+    //q(0) : Angle of joint 1
+
     double q1 = q(0);
     
     double sq = sin(q1);
@@ -530,7 +539,7 @@ MatrixXd JointToTransform01(VectorXd q)
 
 MatrixXd JointToTransform12(VectorXd q)
 {
-    //q(1) = angle of joint 2
+    //q(1) : Angle of joint 2
     
     double q2 = q(1);
     
@@ -548,8 +557,7 @@ MatrixXd JointToTransform12(VectorXd q)
 
 MatrixXd JointToTransform23(VectorXd q)
 {
-    //Hip roll link frame to hip pitch link frame
-    //q(2) = angle of joint 3
+    //q(2) : Angle of joint 3
     
     double q3 = q(2);
     
@@ -567,8 +575,7 @@ MatrixXd JointToTransform23(VectorXd q)
 
 MatrixXd JointToTransform34(VectorXd q)
 {
-    //Hip pitch link frame to knee pitch link frame
-    //q(3) = angle of joint 4
+    //q(3) : Angle of joint 4
     
     double q4 = q(3);
     
@@ -586,8 +593,7 @@ MatrixXd JointToTransform34(VectorXd q)
 
 MatrixXd JointToTransform45(VectorXd q)
 {
-    //Knee pitch link frame to ankle pitch link frame
-    //q(4) = angle of joint 5
+    //q(4) : angle of joint 5
     
     double q5 = q(4);
     
@@ -605,8 +611,7 @@ MatrixXd JointToTransform45(VectorXd q)
 
 MatrixXd JointToTransform56(VectorXd q)
 {
-    //Ankle pitch link frame to ankle roll link frame
-    //q(5) = angle of joint 6
+    //q(5) : Angle of joint 6
     
     double q6 = q(5);
     
@@ -624,8 +629,7 @@ MatrixXd JointToTransform56(VectorXd q)
 
 MatrixXd GetTransform6E(void)
 {
-    //Ankle roll link frame to foot link frame
-    //두 좌표계 사이 회전 관계는 없고 z 방향 거리 관계만 존재한다.
+    //두 좌표계 사이 회전 관계는 없고 x 방향 거리 관계만 존재한다.
     
     MatrixXd htm6E(4, 4);
     htm6E << 1, 0, 0, 0.15,\
@@ -686,11 +690,10 @@ MatrixXd JointToRotMat(VectorXd q)
 //------------------------------------------------------------//
 // Practice 3. Geometric Jacobian (fuction declaration)
 //------------------------------------------------------------//
-
 MatrixXd JointToPosJac(VectorXd q)
 {
-    // Input: vector of generalized coordinates (joint angles)
-    // Output: J_P, Jacobian of the end-effector translation which maps joint velocities to end-effector linear velocities in I frame.
+    //Input : Vector of generalized coordinates (joint angles)
+    //Output : J_P, Jacobian of the end-effector translation which maps joint velocities to end-effector linear velocities in I frame.
     MatrixXd J_P = MatrixXd::Zero(3, 6);
     MatrixXd T_I0(4, 4), T_01(4, 4), T_12(4, 4), T_23(4, 4), T_34(4, 4), T_45(4, 4), T_56(4, 4), T_6E(4, 4);
     MatrixXd T_I1(4, 4), T_I2(4, 4), T_I3(4, 4), T_I4(4, 4), T_I5(4, 4), T_I6(4, 4);
@@ -700,7 +703,7 @@ MatrixXd JointToPosJac(VectorXd q)
     Vector3d n_I_1, n_I_2, n_I_3, n_I_4, n_I_5, n_I_6;
     Vector3d r_I_IE;
 
-    //* Compute the relative homogeneous transformation matrices.
+    //Compute the relative homogeneous transformation matrices.
     T_I0 = GetTransformI0();
     T_01 = JointToTransform01(q);
     T_12 = JointToTransform12(q);
@@ -710,7 +713,7 @@ MatrixXd JointToPosJac(VectorXd q)
     T_56 = JointToTransform56(q);
     T_6E = GetTransform6E();
 
-    //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
+    //Compute the homogeneous transformation matrices from frame k to the inertial frame I.
     T_I1 = T_I0 * T_01;
     T_I2 = T_I0 * T_01 * T_12;
     T_I3 = T_I0 * T_01 * T_12 * T_23;
@@ -718,7 +721,7 @@ MatrixXd JointToPosJac(VectorXd q)
     T_I5 = T_I0 * T_01 * T_12 * T_23 * T_34 * T_45;
     T_I6 = T_I0 * T_01 * T_12 * T_23 * T_34 * T_45 * T_56;
 
-    //* Extract the rotation matrices from each homogeneous transformation matrix. Use sub-matrix of EIGEN. https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
+    //Extract the rotation matrices from each homogeneous transformation matrix. Use sub-matrix of EIGEN. https://eigen.tuxfamily.org/dox/group__QuickRefPage.html
     R_I1 = T_I1.block(0, 0, 3, 3);
     R_I2 = T_I2.block(0, 0, 3, 3);
     R_I3 = T_I3.block(0, 0, 3, 3);
@@ -726,7 +729,7 @@ MatrixXd JointToPosJac(VectorXd q)
     R_I5 = T_I5.block(0, 0, 3, 3);
     R_I6 = T_I6.block(0, 0, 3, 3);
 
-    //* Extract the position vectors from each homogeneous transformation matrix. Use sub-matrix of EIGEN.
+    //Extract the position vectors from each homogeneous transformation matrix. Use sub-matrix of EIGEN.
     r_I_I1 = T_I1.block(0, 3, 3, 1);
     r_I_I2 = T_I2.block(0, 3, 3, 1);
     r_I_I3 = T_I3.block(0, 3, 3, 1);
@@ -734,7 +737,7 @@ MatrixXd JointToPosJac(VectorXd q)
     r_I_I5 = T_I5.block(0, 3, 3, 1);
     r_I_I6 = T_I6.block(0, 3, 3, 1);
 
-    //* Define the unit vectors around which each link rotate in the precedent coordinate frame.
+    //Define the unit vectors around which each link rotate in the precedent coordinate frame.
     n_1 << 0, 0, 1;
     n_2 << 0, 1, 0;
     n_3 << 0, 1, 0;
@@ -742,7 +745,7 @@ MatrixXd JointToPosJac(VectorXd q)
     n_5 << 0, 1, 0;
     n_6 << 1, 0, 0;
 
-    //* Compute the unit vectors for the inertial frame I.
+    //Compute the unit vectors for the inertial frame I.
     n_I_1 = R_I1 * n_1;
     n_I_2 = R_I2 * n_2;
     n_I_3 = R_I3 * n_3;
@@ -750,10 +753,10 @@ MatrixXd JointToPosJac(VectorXd q)
     n_I_5 = R_I5 * n_5;
     n_I_6 = R_I6 * n_6;
 
-    //* Compute the end-effector position vector.
-    r_I_IE = (T_I6 * T_6E).block(0, 3, 3, 1);		//T_I6 * T_6E = TIE
+    //Compute the end-effector position vector.
+    r_I_IE = (T_I6 * T_6E).block(0, 3, 3, 1);       //T_I6 * T_6E = TIEs
 
-    //* Compute the translational Jacobian. Use cross of EIGEN.
+    //Compute the translational Jacobian. Use cross of EIGEN.
     J_P.col(0) << n_I_1.cross(r_I_IE - r_I_I1);
     J_P.col(1) << n_I_2.cross(r_I_IE - r_I_I2);
     J_P.col(2) << n_I_3.cross(r_I_IE - r_I_I3);
@@ -768,15 +771,15 @@ MatrixXd JointToPosJac(VectorXd q)
 
 MatrixXd JointToRotJac(VectorXd q)
 {
-   // Input: vector of generalized coordinates (joint angles)
-    // Output: J_R, Jacobian of the end-effector orientation which maps joint velocities to end-effector angular velocities in I frame.
+    //Input : Vector of generalized coordinates (joint angles)
+    //Output : J_R, Jacobian of the end-effector orientation which maps joint velocities to end-effector angular velocities in I frame.
     MatrixXd J_R(3, 6);
     MatrixXd T_I0(4, 4), T_01(4, 4), T_12(4, 4), T_23(4, 4), T_34(4, 4), T_45(4, 4), T_56(4, 4), T_6E(4, 4);
     MatrixXd T_I1(4, 4), T_I2(4, 4), T_I3(4, 4), T_I4(4, 4), T_I5(4, 4), T_I6(4, 4);
     MatrixXd R_I1(3, 3), R_I2(3, 3), R_I3(3, 3), R_I4(3, 3), R_I5(3, 3), R_I6(3, 3);
     Vector3d n_1, n_2, n_3, n_4, n_5, n_6;
 
-    //* Compute the relative homogeneous transformation matrices.
+    //Compute the relative homogeneous transformation matrices.
     T_I0 = GetTransformI0();
     T_01 = JointToTransform01(q);
     T_12 = JointToTransform12(q);
@@ -786,7 +789,7 @@ MatrixXd JointToRotJac(VectorXd q)
     T_56 = JointToTransform56(q);
     T_6E = GetTransform6E();
 
-    //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
+    //Compute the homogeneous transformation matrices from frame k to the inertial frame I.
     T_I1 = T_I0 * T_01;
     T_I2 = T_I0 * T_01 * T_12;
     T_I3 = T_I0 * T_01 * T_12 * T_23;
@@ -794,7 +797,7 @@ MatrixXd JointToRotJac(VectorXd q)
     T_I5 = T_I0 * T_01 * T_12 * T_23 * T_34 * T_45;
     T_I6 = T_I0 * T_01 * T_12 * T_23 * T_34 * T_45 * T_56;
 
-    //* Extract the rotation matrices from each homogeneous transformation matrix.
+    //Extract the rotation matrices from each homogeneous transformation matrix.
     R_I1 = T_I1.block(0, 0, 3, 3);
     R_I2 = T_I2.block(0, 0, 3, 3);
     R_I3 = T_I3.block(0, 0, 3, 3);
@@ -802,7 +805,7 @@ MatrixXd JointToRotJac(VectorXd q)
     R_I5 = T_I5.block(0, 0, 3, 3);
     R_I6 = T_I6.block(0, 0, 3, 3);
 
-    //* Define the unit vectors around which each link rotate in the precedent coordinate frame.
+    //Define the unit vectors around which each link rotate in the precedent coordinate frame.
     n_1 << 0, 0, 1;
     n_2 << 0, 1, 0;
     n_3 << 0, 1, 0;
@@ -810,7 +813,7 @@ MatrixXd JointToRotJac(VectorXd q)
     n_5 << 0, 1, 0;
     n_6 << 1, 0, 0;
 
-    //* Compute the translational Jacobian.
+    //Compute the translational Jacobian.
     J_R.col(0) << R_I1 * n_1;
     J_R.col(1) << R_I2 * n_2;
     J_R.col(2) << R_I3 * n_3;
@@ -824,12 +827,12 @@ MatrixXd JointToRotJac(VectorXd q)
 }
 
 //------------------------------------------------------------//
-// Practice 4. Pseudo-inverse & RotMatToRotVec (fuction declaration)
+// Practice 4. Pseudo-inverse (fuction declaration)
 //------------------------------------------------------------//
 MatrixXd PseudoInverseMat(MatrixXd A, double lambda)
 {
-    // Input: Any m-by-n matrix
-    // Output: An n-by-m pseudo-inverse of the input according to the Moore-Penrose formula
+    //Input : Any m-by-n matrix
+    //Output : An n-by-m pseudo-inverse of the input according to the Moore-Penrose formula
     MatrixXd pinvA, I;
     int m = A.rows(), n = A.cols();
     
@@ -852,38 +855,13 @@ MatrixXd PseudoInverseMat(MatrixXd A, double lambda)
     return pinvA;
 }
 
-VectorXd RotMatToRotVec(MatrixXd C)
-{
-    // Input: a rotation matrix C
-    // Output: the rotational vector which describes the rotation C
-    VectorXd phi(3), n(3);
-    double th;
-    
-    th = acos((C(0, 0) + C(1, 1) + C(2, 2) - 1) / 2);
-    if(fabs(th) < 0.001)
-    {
-         n << 0, 0, 0;
-    }
-    else
-    {
-        n << (C(2, 1) - C(1, 2)),\
-                (C(0, 2) - C(2, 0)),\
-                (C(1, 0) - C(0, 1));
-        n = (1 / (2 * sin(th))) * n;
-    }
-        
-    phi = th * n;
-    
-    return phi;
-}
-
 //------------------------------------------------------------//
 // Practice 5. Inverse kinematics (fuction declaration)
 //------------------------------------------------------------//
 VectorXd InverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol)
 {
-    // Input: desired end-effector position, desired end-effector orientation, initial guess for joint angles, threshold for the stopping-criterion
-    // Output: joint angles which match desired end-effector position and orientation
+    //Input : desired end-effector position, desired end-effector orientation, initial guess for joint angles, threshold for the stopping-criterion
+    //Output : joint angles which match desired end-effector position and orientation
     
     clock_gettime(CLOCK_MONOTONIC, &ik_start_time);         //IK 시작 시각을 ik_start_time 변수에 저장한다.
     
@@ -893,27 +871,27 @@ VectorXd InverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
     Vector3d dr, dph;
     double lambda;
     
-    //* Set maximum number of iterations
+    //Set maximum number of iterations
     double max_it = 200;
     
-    //* Initialize the solution with the initial guess
+    //Initialize the solution with the initial guess
     q = q0;
     C_IE = JointToRotMat(q);     //q0로 구한 end-effector의 orientation
     C_err = C_des * C_IE.transpose();
     
-    //* Damping factor
+    //Damping factor
     lambda = 0.001;
     
-    //* Initialize error
+    //Initialize error
     dr = r_des - JointToPosition(q);
     dph = RotMatToRotVec(C_err);
     dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
     
     ////////////////////////////////////////////////
-    //** Iterative inverse kinematics
+    // Iterative inverse kinematics
     ////////////////////////////////////////////////
     
-    //* Iterate until terminating condition
+    //Iterate until terminating condition
     while (num_it < max_it && dXe.norm() > tol)
     {
         
@@ -924,13 +902,13 @@ VectorXd InverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
         J.block(0, 0, 3, 6) = J_P;
         J.block(3, 0, 3, 6) = J_R; // Geometric Jacobian
         
-        // Convert to Geometric Jacobian to Analytic Jacobian
+        //Convert to Geometric Jacobian to Analytic Jacobian
         dq = PseudoInverseMat(J, lambda) * dXe;
         
-        // Update law
+        //Update law
         q += 0.5 * dq;
         
-        // Update error
+        //Update error
         C_IE = JointToRotMat(q);
         C_err = C_des * C_IE.transpose();
         
@@ -953,7 +931,7 @@ VectorXd InverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
 //------------------------------------------------------------//
 // Practice 6. 1 - cos trajectory planning
 //------------------------------------------------------------//
-double Func_1_cos(double t, double init, double final, double T)
+double Func_1_cos(double init, double final, double t, double T)
 {
     double des;
     
@@ -962,7 +940,7 @@ double Func_1_cos(double t, double init, double final, double T)
     return des;
 }
 
-Vector3d Func_1_cos(double t, Vector3d init, Vector3d final, double T)
+Vector3d Func_1_cos(Vector3d init, Vector3d final, double t, double T)
 {
     Vector3d des;
 
@@ -1280,7 +1258,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                     goal_posi(_Z) = start_posi(_Z) + joy.z;
                     joy_goal_cal = false;
                 }
-                command_posi = Func_1_cos(time, start_posi, goal_posi, T);
+                command_posi = Func_1_cos(start_posi, goal_posi, time, T);
                 command_rot = goal_rot;
                 q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
                 q0 = q_command;
@@ -1294,21 +1272,20 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         }
         else if (man_control == false && rot_control == true) {
             //Rotation control
-
             start_posi = goal_posi;
             start_rot = goal_rot;
             Vector3d temp_Euler;
-            temp_Euler = RotMatToEuler(start_rot);
-            ori.roll = temp_Euler(0) + joy.x;
+            temp_Euler = RotMatToEulerZyx(start_rot);
+            ori.roll = temp_Euler(2) + joy.x;
             ori.pitch = temp_Euler(1) + joy.y;
-            ori.yaw = temp_Euler(2) + joy.z;
+            ori.yaw = temp_Euler(0) + joy.z;
             //ori.roll += joy.x;
             //ori.pitch += joy.y;
             //ori.yaw += joy.z;
             goal_rot = EulerZyxToRotMat(ori.yaw, ori.pitch, ori.roll);
             //goal_rot = RpyToRotMat(ori.roll, ori.pitch, ori.yaw);
-            C_err = goal_rot * start_rot.transpose();
-            a_axis = RotMatToAngleAxis(C_err);
+            //C_err = goal_rot * start_rot.transpose();
+            //a_axis = RotMatToAngleAxis(C_err);
             command_posi = goal_posi;
             command_rot = goal_rot;
             //command_rot = start_rot * AngleAxisToRotMat(a_axis);
@@ -1329,12 +1306,12 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     if (homing == 1) {
         T = 4.0;
         if (time < T) {
-            joint[J1].targetRadian = Func_1_cos(time, q_init(0), q_goal(0), T);
-            joint[J2].targetRadian = Func_1_cos(time, q_init(1), q_goal(1), T);
-            joint[J3].targetRadian = Func_1_cos(time, q_init(2), q_goal(2), T);
-            joint[J4].targetRadian = Func_1_cos(time, q_init(3), q_goal(3), T);
-            joint[J5].targetRadian = Func_1_cos(time, q_init(4), q_goal(4), T);
-            joint[J6].targetRadian = Func_1_cos(time, q_init(5), q_goal(5), T);
+            joint[J1].targetRadian = Func_1_cos(q_init(0), q_goal(0), time, T);
+            joint[J2].targetRadian = Func_1_cos(q_init(1), q_goal(1), time, T);
+            joint[J3].targetRadian = Func_1_cos(q_init(2), q_goal(2), time, T);
+            joint[J4].targetRadian = Func_1_cos(q_init(3), q_goal(3), time, T);
+            joint[J5].targetRadian = Func_1_cos(q_init(4), q_goal(4), time, T);
+            joint[J6].targetRadian = Func_1_cos(q_init(5), q_goal(5), time, T);
         }
         else if (time >= T) {
             joint[J1].targetRadian = q_goal(0);
@@ -1362,7 +1339,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //--------------------------------------------------//
     //Home position : [0; 0.4; 0.4]
     //Homing(joint) -> Circle(task) -> Homing(joint)
-    //AngleAxis term_a_axis = a_axis;
+    //AngleAxis_ term_a_axis = a_axis;
     //MatrixXd term_C;
     //int i;
 
@@ -1400,9 +1377,9 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                 a_axis = RotMatToAngleAxis(C_err);
                 joy_goal_cal = false;
             }
-            AngleAxis command_a_axis = a_axis;
-            command_posi = Func_1_cos(time, start_posi, goal_posi, T);
-            command_a_axis.th = Func_1_cos(time, 0, a_axis.th, T);
+            AngleAxis_ command_a_axis = a_axis;
+            command_posi = Func_1_cos(start_posi, goal_posi, time, T);
+            command_a_axis.th = Func_1_cos(0, a_axis.th, time, T);
             cout << "\ncommand_a_axis.n = \n" << command_a_axis.n << endl;
             cout << "\ncommand_a_axis.th = " << command_a_axis.th*R2D << endl;
             command_rot = start_rot * AngleAxisToRotMat(command_a_axis);
@@ -1420,9 +1397,9 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                 a_axis = RotMatToAngleAxis(C_err);
                 joy_goal_cal = false;
             }
-            AngleAxis command_a_axis = a_axis;
-            command_posi = Func_1_cos(time, start_posi, goal_posi, T);
-            command_a_axis.th = Func_1_cos(time, 0, a_axis.th, T);
+            AngleAxis_ command_a_axis = a_axis;
+            command_posi = Func_1_cos(start_posi, goal_posi, time, T);
+            command_a_axis.th = Func_1_cos(0, a_axis.th, time, T);
             cout << "\ncommand_a_axis.n = \n" << command_a_axis.n << endl;
             cout << "\ncommand_a_axis.th = " << command_a_axis.th*R2D << endl;
             command_rot = start_rot * AngleAxisToRotMat(command_a_axis);
@@ -1449,12 +1426,12 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     if (homing == 1) {
         T = 4.0;
         if (time < T) {
-            joint[J1].targetRadian = Func_1_cos(time, q_init(0), q_goal(0), T);
-            joint[J2].targetRadian = Func_1_cos(time, q_init(1), q_goal(1), T);
-            joint[J3].targetRadian = Func_1_cos(time, q_init(2), q_goal(2), T);
-            joint[J4].targetRadian = Func_1_cos(time, q_init(3), q_goal(3), T);
-            joint[J5].targetRadian = Func_1_cos(time, q_init(4), q_goal(4), T);
-            joint[J6].targetRadian = Func_1_cos(time, q_init(5), q_goal(5), T);
+            joint[J1].targetRadian = Func_1_cos(q_init(0), q_goal(0), time, T);
+            joint[J2].targetRadian = Func_1_cos(q_init(1), q_goal(1), time, T);
+            joint[J3].targetRadian = Func_1_cos(q_init(2), q_goal(2), time, T);
+            joint[J4].targetRadian = Func_1_cos(q_init(3), q_goal(3), time, T);
+            joint[J5].targetRadian = Func_1_cos(q_init(4), q_goal(4), time, T);
+            joint[J6].targetRadian = Func_1_cos(q_init(5), q_goal(5), time, T);
         }
         else if (time >= T) {
             joint[J1].targetRadian = q_goal(0);
@@ -1480,7 +1457,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     }
     present_posi = JointToPosition(q_present);
     present_rot = JointToRotMat(q_present);
-    cout << "\nEulerZYX = \n" << RotMatToEuler(present_rot) * R2D << endl;
+    cout << "\nEulerZYX = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
 
     /*
     //cout << "\nq_present = \n" << q_present * R2D << endl;
@@ -1490,7 +1467,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //cout << "\ncommand_position = \n" << command_posi << endl;
 
     cout << "\npresent_rotation = \n" << present_rot << endl;
-    cout << "\nEuler_matrix(deg) = \n" << RotMatToEuler(present_rot) * R2D << endl;
+    cout << "\nEuler_matrix(deg) = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
     term_a_axis = RotMatToAngleAxis(present_rot);
     cout << "\nAngle_axis(n) = \n" << term_a_axis.n << endl;
     cout << "\nAngle_axis(th, deg) = \n" << term_a_axis.th * R2D << endl;
@@ -1726,9 +1703,9 @@ void gazebo::drok4_plugin::SetJointPIDgain()
     joint[J1].Kp = 1500;
     joint[J2].Kp = 15000;//300;//200;//125;     //가장 부하가 많이 걸리는 관절
     joint[J3].Kp = 10000;//300;//200;//155;    //가장 부하가 많이 걸리는 관절 2
-    joint[J4].Kp = 50;//50;//25;//15;
+    joint[J4].Kp = 250;//50;//25;//15;
     joint[J5].Kp = 300;//150;//100;//25;//15;
-    joint[J6].Kp = 50;//10;
+    joint[J6].Kp = 100;//10;
 
     joint[J1].Kd = 0.065;
     joint[J2].Kd = 80;//0.120;//0.300;//0.200;//0.130;
