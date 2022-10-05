@@ -14,6 +14,7 @@
 //* Header file for C++
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 #include <iostream>
@@ -151,12 +152,18 @@ namespace gazebo
         double dt;
         double time = 0;
 
-        double PDtime = 0;
+        int prev_press[5] = { 0 };
+        int press[5] = { 0 };
+        bool pressed[5] = { false };
+        int joint_id = 0;
+        double joint_command = 0.0;
+        //bool joint_select[6] = {false};
         //double P_coeff = 1, D_coeff = 1;
 
         int homing = 1;
-        bool homing_goal_cal = true;
-        bool angle_set = false;
+        bool goal_cal_once = true;
+        bool rot_control = false;
+        bool man_control = false;
         //bool joy_goal_cal = true;
         //bool arrived = true;
 
@@ -254,39 +261,89 @@ namespace gazebo
 //------------------------------------------------------------//
 void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
 {
-    if (msg->buttons[1] == 1) {
-        //O, Home positioning button
-        homing = 1;
-        time = 0;
-        angle_set = false;
-        //joy_goal_cal = true;
-    }
-    else if (msg->buttons[0] == 1) {
-        //X, Joystick position control button
-        homing = -1;
-        time = 0;
-        angle_set = false;   //Position ctrl
-        homing_goal_cal = true;
-    }
-    else if (msg->buttons[2] == 1) {
-        //Triangle, Joystick rotation control button
-        homing = -1;
-        time = 0;
-        angle_set = true;  //Rotation ctrl
-        homing_goal_cal = true;
+    press[0] = msg->buttons[0];
+    press[1] = msg->buttons[1];
+    press[2] = msg->buttons[2];
+    press[3] = msg->buttons[3];
+    press[4] = -(int)msg->axes[6];    //left : 1.0, right : -1.0
+
+    for (int i = 0; i < 5; i++)
+    {
+        if (abs(prev_press[i]) == 1 && prev_press[i] * press[i] == 0) {
+            pressed[i] = true;
+        }
     }
 
-    if (angle_set == false) {
+    if (pressed[0] == true)
+    {
+        //X, Joystick position control button
+        pressed[3] = false;
+        homing = -1;
+        rot_control = false;
+        man_control = false;
+        pressed[0] = false;
+    }
+    else if (pressed[1] == true)
+    {
+        //O, Home positioning button
+        pressed[3] = false;
+        homing = 1;
+        time = 0;
+        goal_cal_once = true;
+        rot_control = false;
+        man_control = false;
+        pressed[1] = false;
+    }
+    else if (pressed[2] == true)
+    {
+        //Triangle, Joystick rotation control button
+
+        pressed[3] = false;
+        homing = -1;
+        rot_control = true;
+        man_control = false;
+        pressed[2] = false;
+    }
+    else if (pressed[3] == true)
+    {
+        //Square, Manual joint control button (Joystick)
+        homing = -1;
+        man_control = true;
+        if (pressed[4] == true && press[4] > 0) {
+            if (joint_id == 5) joint_id = 0;
+            else joint_id++;
+            //joint_id = (joint_id == 5) ? (0) : (joint_id++);
+            pressed[4] = false;
+        }
+        else if (pressed[4] == true && press[4] < 0) {
+            if (joint_id == 0) joint_id = 5;
+            else joint_id--;
+            //joint_id = (joint_id == 0) ? (6) : (joint_id--);
+            pressed[4] = false;
+        }
+    }
+
+    if (man_control == false && rot_control == false)
+    {
         joy.x = msg->axes[1] * 0.0005;
         joy.y = msg->axes[0] * -0.0005;
         joy.z = msg->axes[4] * 0.0005;
     }
-    else if (angle_set == true) {
-        ori.roll += msg->axes[1] * 0.1 * D2R;
-        ori.pitch += msg->axes[0] * -0.1 * D2R;
-        ori.yaw += msg->axes[4] * 0.1 * D2R;
+    else if (man_control == false && rot_control == true)
+    {
+        ori.roll += msg->axes[1] * 0.05 * D2R;
+        ori.pitch += msg->axes[0] * -0.05 * D2R;
+        ori.yaw += msg->axes[4] * 0.05 * D2R;
+    }
+    else if (man_control == true)
+    {
+        joint_command = -msg->axes[4] * 0.01 * D2R;
     }
 
+    memcpy(prev_press, press, sizeof (prev_press));
+    //cout << "\npressed = " << pressed[0] << '\t' << pressed[1] << '\t' << pressed[2]
+    //     << '\t' << pressed[3] << '\t' << pressed[4] << endl;
+    //cout << "\njoint_id = " << joint_id << endl;
     //cout << "homing = " << homing << endl;
     //if (updateTime == 0)
     //    subTime += 1;
@@ -1168,7 +1225,6 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     dt = current_time.Double() - last_update_time.Double();
     //    cout << "dt:" << dt << endl;
     time = time + dt;
-    PDtime = PDtime + dt;
     //    cout << "time:" << time << endl;
 
     //* setting for getting dt at next step
@@ -1185,7 +1241,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //--------------------------------------------------//
 
     int i;
-    if (homing == 1 && homing_goal_cal == true)
+    if (homing == 1 && goal_cal_once == true)
     {
         T = 4;
         if (phase == 0) {
@@ -1196,11 +1252,11 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         }
         q_goal = inverseKinematics(goal_posi, goal_rot, q0, 0.001);
         q0 = q_goal;
-        homing_goal_cal = false;
+        goal_cal_once = false;
     }
     else if (homing == -1)
     {
-        if (angle_set == false) {
+        if (man_control == false && rot_control == false) {
             //Position control
             start_posi = goal_posi;
             start_rot = goal_rot;
@@ -1234,7 +1290,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             }
             */
         }
-        else if (angle_set == true) {
+        else if (man_control == false && rot_control == true) {
             //Rotation control
             start_posi = goal_posi;
             start_rot = goal_rot;
@@ -1247,6 +1303,13 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             command_posi = goal_posi;
             command_rot = start_rot * angleAxisToRotMat(a_axis);
             q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+            q0 = q_command;
+        }
+        else if (man_control == true) {
+            cout << "Manual joint control : Joint " << joint_id << endl;
+            q_present = q_command;
+            q_goal(joint_id) = q_present(joint_id) + joint_command;
+            q_command = q_goal;
             q0 = q_command;
         }
     }
@@ -1291,7 +1354,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //int i;
 
     /*
-    if (homing == 1 && homing_goal_cal == true)
+    if (homing == 1 && goal_cal_once == true)
     {
         if (phase == 0) {
             goal_posi << 0.4, 0, 0.8;//0.7, 0, 0.8;
@@ -1307,7 +1370,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
 
             //start_posi = goal_posi;
             //start_rot = goal_rot;
-            homing_goal_cal = false;
+            goal_cal_once = false;
         }
     }
     else if (homing == -1)
