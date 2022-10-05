@@ -250,7 +250,7 @@ namespace gazebo
         void PdControl(double P_coeff, double D_coeff);
         //bool Arrived(double dt);
 
-        void joyCallback(const sensor_msgs::Joy::ConstPtr &msg);
+        void JoyCallback(const sensor_msgs::Joy::ConstPtr &msg);
 
     };
     GZ_REGISTER_MODEL_PLUGIN(drok4_plugin);
@@ -259,7 +259,7 @@ namespace gazebo
 //------------------------------------------------------------//
 // Joystick callback function
 //------------------------------------------------------------//
-void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
+void gazebo::drok4_plugin::JoyCallback(const sensor_msgs::Joy::ConstPtr &msg)
 {
     press[0] = msg->buttons[0];
     press[1] = msg->buttons[1];
@@ -271,6 +271,7 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
     {
         if (abs(prev_press[i]) == 1 && prev_press[i] * press[i] == 0) {
             pressed[i] = true;
+            q_goal = q_command;
         }
     }
 
@@ -308,6 +309,7 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
     {
         //Square, Manual joint control button (Joystick)
         homing = -1;
+        rot_control = false;
         man_control = true;
         if (pressed[4] == true && press[4] > 0) {
             if (joint_id == 5) joint_id = 0;
@@ -331,13 +333,13 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
     }
     else if (man_control == false && rot_control == true)
     {
-        ori.roll += msg->axes[1] * 0.05 * D2R;
-        ori.pitch += msg->axes[0] * -0.05 * D2R;
-        ori.yaw += msg->axes[4] * 0.05 * D2R;
+        joy.x = msg->axes[1] * 0.05 * D2R;
+        joy.y = msg->axes[0] * -0.05 * D2R;
+        joy.z = msg->axes[4] * 0.05 * D2R;
     }
     else if (man_control == true)
     {
-        joint_command = -msg->axes[4] * 0.01 * D2R;
+        joint_command = msg->axes[4] * 0.01 * D2R;
     }
 
     memcpy(prev_press, press, sizeof (prev_press));
@@ -353,7 +355,7 @@ void gazebo::drok4_plugin::joyCallback(const sensor_msgs::Joy::ConstPtr &msg)
 //------------------------------------------------------------//
 // Transformation functions between orientation expressions
 //------------------------------------------------------------//
-AngleAxis rotMatToAngleAxis(MatrixXd C)
+AngleAxis RotMatToAngleAxis(MatrixXd C)
 {
     AngleAxis a_axis;
     Vector3d n;
@@ -379,7 +381,7 @@ AngleAxis rotMatToAngleAxis(MatrixXd C)
     return a_axis;
 }
 
-MatrixXd angleAxisToRotMat(AngleAxis a_axis)
+MatrixXd AngleAxisToRotMat(AngleAxis a_axis)
 {
     MatrixXd C(3, 3);
     Vector3d n = a_axis.n;
@@ -399,7 +401,7 @@ MatrixXd angleAxisToRotMat(AngleAxis a_axis)
     return C;
 }
 
-VectorXd rotMatToEuler(MatrixXd rotMat)
+VectorXd RotMatToEuler(MatrixXd rotMat)
 {
     //회전 행렬을 Euler ZYX로 변환 (1)
     double c11 = rotMat(0, 0), c21 = rotMat(1, 0), c31 = rotMat(2, 0),\
@@ -456,8 +458,8 @@ MatrixXd RpyToRotMat(double roll, double pitch, double yaw)
     AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
     AngleAxisd yawAngle(yaw, Eigen::Vector3d::UnitZ());
 
-    //Quaterniond q = rollAngle * pitchAngle * yawAngle;
-    Quaterniond q = yawAngle * pitchAngle * rollAngle;
+    Quaterniond q = rollAngle * pitchAngle * yawAngle;
+    //Quaterniond q = yawAngle * pitchAngle * rollAngle;
     rotMat = q.toRotationMatrix();
 
     return rotMat;
@@ -494,7 +496,7 @@ void RpyToQuaternion(void)
 // 1, 2, 5, 6번 관절은 음의 축방향으로 회전한다.
 //------------------------------------------------------------//
 
-MatrixXd getTransformI0(void)
+MatrixXd GetTransformI0(void)
 {
     //Global frame to base link frame
     //htm = homogeneous transformation matrix
@@ -506,7 +508,7 @@ MatrixXd getTransformI0(void)
     //Variable way to enter matrix formation : 
 }
 
-MatrixXd jointToTransform01(VectorXd q)
+MatrixXd JointToTransform01(VectorXd q)
 {
     //Base link frame to hip yaw link frame
     //q = generalized coordinates, q = [q1; q2; q3; q4; q5; q6]
@@ -526,7 +528,7 @@ MatrixXd jointToTransform01(VectorXd q)
     return htm01;
 }
 
-MatrixXd jointToTransform12(VectorXd q)
+MatrixXd JointToTransform12(VectorXd q)
 {
     //q(1) = angle of joint 2
     
@@ -544,7 +546,7 @@ MatrixXd jointToTransform12(VectorXd q)
     return htm12;
 }
 
-MatrixXd jointToTransform23(VectorXd q)
+MatrixXd JointToTransform23(VectorXd q)
 {
     //Hip roll link frame to hip pitch link frame
     //q(2) = angle of joint 3
@@ -563,7 +565,7 @@ MatrixXd jointToTransform23(VectorXd q)
     return htm23;
 }
 
-MatrixXd jointToTransform34(VectorXd q)
+MatrixXd JointToTransform34(VectorXd q)
 {
     //Hip pitch link frame to knee pitch link frame
     //q(3) = angle of joint 4
@@ -582,7 +584,7 @@ MatrixXd jointToTransform34(VectorXd q)
     return htm34;
 }
 
-MatrixXd jointToTransform45(VectorXd q)
+MatrixXd JointToTransform45(VectorXd q)
 {
     //Knee pitch link frame to ankle pitch link frame
     //q(4) = angle of joint 5
@@ -601,7 +603,7 @@ MatrixXd jointToTransform45(VectorXd q)
     return htm45;
 }
 
-MatrixXd jointToTransform56(VectorXd q)
+MatrixXd JointToTransform56(VectorXd q)
 {
     //Ankle pitch link frame to ankle roll link frame
     //q(5) = angle of joint 6
@@ -620,7 +622,7 @@ MatrixXd jointToTransform56(VectorXd q)
     return htm56;
 }
 
-MatrixXd getTransform6E(void)
+MatrixXd GetTransform6E(void)
 {
     //Ankle roll link frame to foot link frame
     //두 좌표계 사이 회전 관계는 없고 z 방향 거리 관계만 존재한다.
@@ -634,18 +636,18 @@ MatrixXd getTransform6E(void)
     return htm6E;
 }
 
-VectorXd jointToPosition(VectorXd q)
+VectorXd JointToPosition(VectorXd q)
 {
     MatrixXd TI0(4, 4), T01(4, 4), T12(4, 4), T23(4, 4), T34(4, 4), T45(4, 4),\
             T56(4, 4), T6E(4, 4), TIE(4, 4);
-    TI0 = getTransformI0();
-    T01 = jointToTransform01(q);
-    T12 = jointToTransform12(q);
-    T23 = jointToTransform23(q);
-    T34 = jointToTransform34(q);
-    T45 = jointToTransform45(q);
-    T56 = jointToTransform56(q);
-    T6E = getTransform6E();
+    TI0 = GetTransformI0();
+    T01 = JointToTransform01(q);
+    T12 = JointToTransform12(q);
+    T23 = JointToTransform23(q);
+    T34 = JointToTransform34(q);
+    T45 = JointToTransform45(q);
+    T56 = JointToTransform56(q);
+    T6E = GetTransform6E();
     
     TIE = TI0 * T01 * T12 * T23 * T34 * T45 * T56 * T6E;
     
@@ -660,18 +662,18 @@ VectorXd jointToPosition(VectorXd q)
     return position;
 }
 
-MatrixXd jointToRotMat(VectorXd q)
+MatrixXd JointToRotMat(VectorXd q)
 {
     MatrixXd TI0(4, 4), T01(4, 4), T12(4, 4), T23(4, 4), T34(4, 4), T45(4, 4),\
             T56(4, 4), T6E(4, 4), TIE(4, 4);
-    TI0 = getTransformI0();
-    T01 = jointToTransform01(q);
-    T12 = jointToTransform12(q);
-    T23 = jointToTransform23(q);
-    T34 = jointToTransform34(q);
-    T45 = jointToTransform45(q);
-    T56 = jointToTransform56(q);
-    T6E = getTransform6E();
+    TI0 = GetTransformI0();
+    T01 = JointToTransform01(q);
+    T12 = JointToTransform12(q);
+    T23 = JointToTransform23(q);
+    T34 = JointToTransform34(q);
+    T45 = JointToTransform45(q);
+    T56 = JointToTransform56(q);
+    T6E = GetTransform6E();
     
     TIE = TI0 * T01 * T12 * T23 * T34 * T45 * T56 * T6E;
     
@@ -685,7 +687,7 @@ MatrixXd jointToRotMat(VectorXd q)
 // Practice 3. Geometric Jacobian (fuction declaration)
 //------------------------------------------------------------//
 
-MatrixXd jointToPosJac(VectorXd q)
+MatrixXd JointToPosJac(VectorXd q)
 {
     // Input: vector of generalized coordinates (joint angles)
     // Output: J_P, Jacobian of the end-effector translation which maps joint velocities to end-effector linear velocities in I frame.
@@ -699,14 +701,14 @@ MatrixXd jointToPosJac(VectorXd q)
     Vector3d r_I_IE;
 
     //* Compute the relative homogeneous transformation matrices.
-    T_I0 = getTransformI0();
-    T_01 = jointToTransform01(q);
-    T_12 = jointToTransform12(q);
-    T_23 = jointToTransform23(q);
-    T_34 = jointToTransform34(q);
-    T_45 = jointToTransform45(q);
-    T_56 = jointToTransform56(q);
-    T_6E = getTransform6E();
+    T_I0 = GetTransformI0();
+    T_01 = JointToTransform01(q);
+    T_12 = JointToTransform12(q);
+    T_23 = JointToTransform23(q);
+    T_34 = JointToTransform34(q);
+    T_45 = JointToTransform45(q);
+    T_56 = JointToTransform56(q);
+    T_6E = GetTransform6E();
 
     //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
     T_I1 = T_I0 * T_01;
@@ -764,7 +766,7 @@ MatrixXd jointToPosJac(VectorXd q)
     return J_P;
 }
 
-MatrixXd jointToRotJac(VectorXd q)
+MatrixXd JointToRotJac(VectorXd q)
 {
    // Input: vector of generalized coordinates (joint angles)
     // Output: J_R, Jacobian of the end-effector orientation which maps joint velocities to end-effector angular velocities in I frame.
@@ -775,14 +777,14 @@ MatrixXd jointToRotJac(VectorXd q)
     Vector3d n_1, n_2, n_3, n_4, n_5, n_6;
 
     //* Compute the relative homogeneous transformation matrices.
-    T_I0 = getTransformI0();
-    T_01 = jointToTransform01(q);
-    T_12 = jointToTransform12(q);
-    T_23 = jointToTransform23(q);
-    T_34 = jointToTransform34(q);
-    T_45 = jointToTransform45(q);
-    T_56 = jointToTransform56(q);
-    T_6E = getTransform6E();
+    T_I0 = GetTransformI0();
+    T_01 = JointToTransform01(q);
+    T_12 = JointToTransform12(q);
+    T_23 = JointToTransform23(q);
+    T_34 = JointToTransform34(q);
+    T_45 = JointToTransform45(q);
+    T_56 = JointToTransform56(q);
+    T_6E = GetTransform6E();
 
     //* Compute the homogeneous transformation matrices from frame k to the inertial frame I.
     T_I1 = T_I0 * T_01;
@@ -822,9 +824,9 @@ MatrixXd jointToRotJac(VectorXd q)
 }
 
 //------------------------------------------------------------//
-// Practice 4. Pseudo-inverse & rotMatToRotVec (fuction declaration)
+// Practice 4. Pseudo-inverse & RotMatToRotVec (fuction declaration)
 //------------------------------------------------------------//
-MatrixXd pseudoInverseMat(MatrixXd A, double lambda)
+MatrixXd PseudoInverseMat(MatrixXd A, double lambda)
 {
     // Input: Any m-by-n matrix
     // Output: An n-by-m pseudo-inverse of the input according to the Moore-Penrose formula
@@ -850,7 +852,7 @@ MatrixXd pseudoInverseMat(MatrixXd A, double lambda)
     return pinvA;
 }
 
-VectorXd rotMatToRotVec(MatrixXd C)
+VectorXd RotMatToRotVec(MatrixXd C)
 {
     // Input: a rotation matrix C
     // Output: the rotational vector which describes the rotation C
@@ -878,7 +880,7 @@ VectorXd rotMatToRotVec(MatrixXd C)
 //------------------------------------------------------------//
 // Practice 5. Inverse kinematics (fuction declaration)
 //------------------------------------------------------------//
-VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol)
+VectorXd InverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double tol)
 {
     // Input: desired end-effector position, desired end-effector orientation, initial guess for joint angles, threshold for the stopping-criterion
     // Output: joint angles which match desired end-effector position and orientation
@@ -896,15 +898,15 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
     
     //* Initialize the solution with the initial guess
     q = q0;
-    C_IE = jointToRotMat(q);     //q0로 구한 end-effector의 orientation
+    C_IE = JointToRotMat(q);     //q0로 구한 end-effector의 orientation
     C_err = C_des * C_IE.transpose();
     
     //* Damping factor
     lambda = 0.001;
     
     //* Initialize error
-    dr = r_des - jointToPosition(q);
-    dph = rotMatToRotVec(C_err);
+    dr = r_des - JointToPosition(q);
+    dph = RotMatToRotVec(C_err);
     dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
     
     ////////////////////////////////////////////////
@@ -916,24 +918,24 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
     {
         
         //Compute Inverse Jacobian
-        J_P = jointToPosJac(q);
-        J_R = jointToRotJac(q);
+        J_P = JointToPosJac(q);
+        J_R = JointToRotJac(q);
 
         J.block(0, 0, 3, 6) = J_P;
         J.block(3, 0, 3, 6) = J_R; // Geometric Jacobian
         
         // Convert to Geometric Jacobian to Analytic Jacobian
-        dq = pseudoInverseMat(J, lambda) * dXe;
+        dq = PseudoInverseMat(J, lambda) * dXe;
         
         // Update law
         q += 0.5 * dq;
         
         // Update error
-        C_IE = jointToRotMat(q);
+        C_IE = JointToRotMat(q);
         C_err = C_des * C_IE.transpose();
         
-        dr = r_des - jointToPosition(q);
-        dph = rotMatToRotVec(C_err);
+        dr = r_des - JointToPosition(q);
+        dph = RotMatToRotVec(C_err);
         dXe << dr(0), dr(1), dr(2), dph(0), dph(1), dph(2);
                    
         num_it++;
@@ -951,7 +953,7 @@ VectorXd inverseKinematics(Vector3d r_des, MatrixXd C_des, VectorXd q0, double t
 //------------------------------------------------------------//
 // Practice 6. 1 - cos trajectory planning
 //------------------------------------------------------------//
-double func_1_cos(double t, double init, double final, double T)
+double Func_1_cos(double t, double init, double final, double T)
 {
     double des;
     
@@ -960,7 +962,7 @@ double func_1_cos(double t, double init, double final, double T)
     return des;
 }
 
-Vector3d func_1_cos(double t, Vector3d init, Vector3d final, double T)
+Vector3d Func_1_cos(double t, Vector3d init, Vector3d final, double T)
 {
     Vector3d des;
 
@@ -971,7 +973,7 @@ Vector3d func_1_cos(double t, Vector3d init, Vector3d final, double T)
     return des;
 }
 
-double func_1_cos_yaw(double start, double end, double t, double T)
+double Func_1_cos_yaw(double start, double end, double t, double T)
 {
     double yaw;
     double delta = end - start;
@@ -1003,35 +1005,35 @@ void Practice(void)
     q << 10, 20, 30, 40, 50, 60;
     q *= D2R;
     
-    r_des = jointToPosition(q);
-    C_des = jointToRotMat(q);
+    r_des = JointToPosition(q);
+    C_des = JointToRotMat(q);
     
     std::cout << "\nMission 1 : \n" << std::endl;
     std::cout << "Answer q (deg) = \n" << q * R2D << endl;
     std::cout << "\nInitial guess q0 (deg) = \n" << q * R2D * 0.5 << endl;
     
-    q_cal = inverseKinematics(r_des, C_des, q * 0.5, 0.001);
+    q_cal = InverseKinematics(r_des, C_des, q * 0.5, 0.001);
     std::cout << "\nq_cal (deg) = \n" << q_cal * R2D << endl;
     
     goal_posi << 0.6, 0.2, 0.05;
     goal_rot = MatrixXd::Identity(3, 3);
     q0 << 30, -30, -60, 10, 30, 10;
-    q_goal = inverseKinematics(goal_posi, goal_rot, q0 * D2R, 0.001);
-    goal_posi = jointToPosition(q_goal);
+    q_goal = InverseKinematics(goal_posi, goal_rot, q0 * D2R, 0.001);
+    goal_posi = JointToPosition(q_goal);
     cout << "\nq_goal = \n" << q_goal * R2D << endl;
     cout << "\ngoal_posi = \n" << goal_posi << endl;
 
     goal_posi(Z_) -= 0.02;
     goal_rot = MatrixXd::Identity(3, 3);
     q0 = q_goal;
-    q_goal = inverseKinematics(goal_posi, goal_rot, q0, 0.001);
-    goal_posi = jointToPosition(q_goal);
+    q_goal = InverseKinematics(goal_posi, goal_rot, q0, 0.001);
+    goal_posi = JointToPosition(q_goal);
     cout << "\nq_goal = \n" << q_goal * R2D << endl;
     cout << "\ngoal_posi = \n" << goal_posi << endl;
 
     /*
     q_goal << 30, -30, -60, 0, 30, 0;
-    goal_posi = jointToPosition(q_goal * D2R);
+    goal_posi = JointToPosition(q_goal * D2R);
     cout << "\nq_goal = \n" << q_goal << endl;
     cout << "\ngoal_posi = \n" << goal_posi << endl;
     //goal_posi의 값 = 0.424, -0.243, 0.047
@@ -1039,8 +1041,8 @@ void Practice(void)
     goal_posi << 0.424, -0.243, 0.047;
     goal_rot = MatrixXd::Identity(3, 3);
     q0 << 30, -30, -60, 10, 30, 10;
-    q_goal = inverseKinematics(goal_posi, goal_rot, q0 * D2R * 0.5, 0.001);
-    goal_posi = jointToPosition(q_goal);
+    q_goal = InverseKinematics(goal_posi, goal_rot, q0 * D2R * 0.5, 0.001);
+    goal_posi = JointToPosition(q_goal);
     cout << "\nq_goal = \n" << q_goal * R2D << endl;
     cout << "\ngoal_posi = \n" << goal_posi << endl;
     */
@@ -1063,8 +1065,8 @@ void Examination(void)
     VectorXd q(6);
     q << 0, 75, -70, 0, -5, 0;
     q *= D2R;
-    goal_posi = jointToPosition(q);
-    goal_rot = jointToRotMat(q);
+    goal_posi = JointToPosition(q);
+    goal_rot = JointToRotMat(q);
     cout << "\nq = \n" << q * R2D << endl;
     cout << "\ngoal position = \n" << goal_posi << endl;
     cout << "\ngoal_rotation = \n" << goal_rot << endl;
@@ -1073,38 +1075,38 @@ void Examination(void)
     MatrixXd TI0(4, 4), T01(4, 4), T12(4, 4), T23(4, 4), T34(4, 4), T45(4, 4),\
             T56(4, 4), T6E(4, 4), TIE(4, 4), rotMat(3, 3);
     VectorXd posVec(3);
-    TI0 = getTransformI0();
-    T01 = jointToTransform01(q);
+    TI0 = GetTransformI0();
+    T01 = JointToTransform01(q);
     posVec = (TI0 * T01).block(0, 3, 3, 1);
     rotMat = (TI0 * T01).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 1 = \n" << posVec << endl;
     cout << "\nRotation of Joint 1 = \n" << rotMat << endl;
 
-    T12 = jointToTransform12(q);
+    T12 = JointToTransform12(q);
     posVec = (TI0 * T01 * T12).block(0, 3, 3, 1);
     rotMat = (TI0 * T01 * T12).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 2 = \n" << posVec << endl;
     cout << "\nRotation of Joint 2 = \n" << rotMat << endl;
 
-    T23 = jointToTransform23(q);
+    T23 = JointToTransform23(q);
     posVec = (TI0 * T01 * T12 * T23).block(0, 3, 3, 1);
     rotMat = (TI0 * T01 * T12 * T23).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 3 = \n" << posVec << endl;
     cout << "\nRotation of Joint 3 = \n" << rotMat << endl;
 
-    T34 = jointToTransform34(q);
+    T34 = JointToTransform34(q);
     posVec = (TI0 * T01 * T12 * T23 * T34).block(0, 3, 3, 1);
     rotMat = (TI0 * T01 * T12 * T23 * T34).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 4 = \n" << posVec << endl;
     cout << "\nRotation of Joint 4 = \n" << rotMat << endl;
 
-    T45 = jointToTransform45(q);
+    T45 = JointToTransform45(q);
     posVec = (TI0 * T01 * T12 * T23 * T34 * T45).block(0, 3, 3, 1);
     rotMat = (TI0 * T01 * T12 * T23 * T34 * T45).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 5 = \n" << posVec << endl;
     cout << "\nRotation of Joint 5 = \n" << rotMat << endl;
 
-    T56 = jointToTransform56(q);
+    T56 = JointToTransform56(q);
     posVec = (TI0 * T01 * T12 * T23 * T34 * T45 * T56).block(0, 3, 3, 1);
     rotMat = (TI0 * T01 * T12 * T23 * T34 * T45 * T56).block(0, 0, 3, 3);
     cout << "\nPosition of Joint 6 = \n" << posVec << endl;
@@ -1115,19 +1117,19 @@ void Examination(void)
     goal_rot = MatrixXd::Identity(3, 3);
     //a_axis.n << 0, 1, 0;
     //a_axis.th = 0;
-    //goal_rot = angleAxisToRotMat(a_axis);
+    //goal_rot = AngleAxisToRotMat(a_axis);
     q0 << 0, 45, -55, 0, 10, 0;//0, 75, -70, 0, 5, 0;
     q0 *= D2R;
-    q_goal = inverseKinematics(goal_posi, goal_rot, q0, 0.001);
+    q_goal = InverseKinematics(goal_posi, goal_rot, q0, 0.001);
     cout << "\nq0 = \n" << q0 * R2D << endl;
     cout << "\nq_goal = \n" << q_goal * R2D << endl;
 
     double yaw;
-    yaw = func_1_cos_yaw(-30*D2R, 91*D2R, 0.001, 4);
-    yaw = func_1_cos_yaw(170*D2R, -170*D2R, 0.001, 4);
-    yaw = func_1_cos_yaw(40*D2R, 290*D2R, 0.001, 4);
-    yaw = func_1_cos_yaw(20*D2R, 200*D2R, 0.001, 4);
-    yaw = func_1_cos_yaw(-200*D2R, 20*D2R, 0.001, 4);
+    yaw = Func_1_cos_yaw(-30*D2R, 91*D2R, 0.001, 4);
+    yaw = Func_1_cos_yaw(170*D2R, -170*D2R, 0.001, 4);
+    yaw = Func_1_cos_yaw(40*D2R, 290*D2R, 0.001, 4);
+    yaw = Func_1_cos_yaw(20*D2R, 200*D2R, 0.001, 4);
+    yaw = Func_1_cos_yaw(-200*D2R, 20*D2R, 0.001, 4);
 
     printf("\n==============================\n");
     std::cout << "Examination end" << std::endl;
@@ -1185,8 +1187,8 @@ void gazebo::drok4_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf
     update_connection = event::Events::ConnectWorldUpdateBegin(boost::bind(&drok4_plugin::UpdateAlgorithm, this));
 
     //* ROS subscriber
-    joySub = nh.subscribe("joy", 1000, &gazebo::drok4_plugin::joyCallback, this);
-    //joySub = nh.subscribe("joy", 1000, joyCallback);
+    joySub = nh.subscribe("joy", 1000, &gazebo::drok4_plugin::JoyCallback, this);
+    //joySub = nh.subscribe("joy", 1000, JoyCallback);
     
     //* Kinematics Test
     Examination();
@@ -1250,7 +1252,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             q0 << 0, -75, -70, 0, 5, 0;
             q0 *= D2R;
         }
-        q_goal = inverseKinematics(goal_posi, goal_rot, q0, 0.001);
+        q_goal = InverseKinematics(goal_posi, goal_rot, q0, 0.001);
         q0 = q_goal;
         goal_cal_once = false;
     }
@@ -1265,7 +1267,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             goal_posi(Z_) = start_posi(Z_) + joy.z;
             command_posi = goal_posi;
             command_rot = goal_rot;
-            q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
             q0 = q_command;
             /*
             T = 50 * 0.001;
@@ -1278,9 +1280,9 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                     goal_posi(_Z) = start_posi(_Z) + joy.z;
                     joy_goal_cal = false;
                 }
-                command_posi = func_1_cos(time, start_posi, goal_posi, T);
+                command_posi = Func_1_cos(time, start_posi, goal_posi, T);
                 command_rot = goal_rot;
-                q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+                q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
                 q0 = q_command;
             }
             else if (time >= T) {
@@ -1292,23 +1294,33 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         }
         else if (man_control == false && rot_control == true) {
             //Rotation control
+
             start_posi = goal_posi;
             start_rot = goal_rot;
+            Vector3d temp_Euler;
+            temp_Euler = RotMatToEuler(start_rot);
+            ori.roll = temp_Euler(0) + joy.x;
+            ori.pitch = temp_Euler(1) + joy.y;
+            ori.yaw = temp_Euler(2) + joy.z;
+            //ori.roll += joy.x;
+            //ori.pitch += joy.y;
+            //ori.yaw += joy.z;
             goal_rot = EulerZyxToRotMat(ori.yaw, ori.pitch, ori.roll);
             //goal_rot = RpyToRotMat(ori.roll, ori.pitch, ori.yaw);
             C_err = goal_rot * start_rot.transpose();
-            a_axis = rotMatToAngleAxis(C_err);
-            //goal_rot = start_rot * RpyToRotMat(joy.x, joy.y, joy.z);
-            //goal_rot = start_rot * EulerZyxToRotMat(joy.z, joy.y, joy.x);
+            a_axis = RotMatToAngleAxis(C_err);
             command_posi = goal_posi;
-            command_rot = start_rot * angleAxisToRotMat(a_axis);
-            q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+            command_rot = goal_rot;
+            //command_rot = start_rot * AngleAxisToRotMat(a_axis);
+            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
             q0 = q_command;
         }
         else if (man_control == true) {
-            cout << "Manual joint control : Joint " << joint_id << endl;
-            q_present = q_command;
-            q_goal(joint_id) = q_present(joint_id) + joint_command;
+            cout << "Manual joint control : Joint " << joint_id + 1 << endl;
+            //q_goal = q_command;
+            q_goal(joint_id) += joint_command;
+            goal_posi = JointToPosition(q_goal);
+            goal_rot = JointToRotMat(q_goal);
             q_command = q_goal;
             q0 = q_command;
         }
@@ -1317,12 +1329,12 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     if (homing == 1) {
         T = 4.0;
         if (time < T) {
-            joint[J1].targetRadian = func_1_cos(time, q_init(0), q_goal(0), T);
-            joint[J2].targetRadian = func_1_cos(time, q_init(1), q_goal(1), T);
-            joint[J3].targetRadian = func_1_cos(time, q_init(2), q_goal(2), T);
-            joint[J4].targetRadian = func_1_cos(time, q_init(3), q_goal(3), T);
-            joint[J5].targetRadian = func_1_cos(time, q_init(4), q_goal(4), T);
-            joint[J6].targetRadian = func_1_cos(time, q_init(5), q_goal(5), T);
+            joint[J1].targetRadian = Func_1_cos(time, q_init(0), q_goal(0), T);
+            joint[J2].targetRadian = Func_1_cos(time, q_init(1), q_goal(1), T);
+            joint[J3].targetRadian = Func_1_cos(time, q_init(2), q_goal(2), T);
+            joint[J4].targetRadian = Func_1_cos(time, q_init(3), q_goal(3), T);
+            joint[J5].targetRadian = Func_1_cos(time, q_init(4), q_goal(4), T);
+            joint[J6].targetRadian = Func_1_cos(time, q_init(5), q_goal(5), T);
         }
         else if (time >= T) {
             joint[J1].targetRadian = q_goal(0);
@@ -1331,6 +1343,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             joint[J4].targetRadian = q_goal(3);
             joint[J5].targetRadian = q_goal(4);
             joint[J6].targetRadian = q_goal(5);
+            q_command = q_goal;
         }
     }
     else if (homing == -1) {
@@ -1362,10 +1375,10 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             goal_rot = MatrixXd::Identity(3, 3);
             //a_axis.n << 0, 1, 0;
             //a_axis.th = 0;
-            //goal_rot = angleAxisToRotMat(a_axis);
+            //goal_rot = AngleAxisToRotMat(a_axis);
             q0 << 0, 45, -55, 0, 10, 0;//0, -75, -70, 0, 5, 0;
             q0 *= D2R;
-            q_goal = inverseKinematics(goal_posi, goal_rot, q0, 0.001);
+            q_goal = InverseKinematics(goal_posi, goal_rot, q0, 0.001);
             q0 = q_goal;
 
             //start_posi = goal_posi;
@@ -1384,17 +1397,17 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                 goal_rot = EulerZyxToRotMat(-10*D2R, 0*D2R, 0*D2R);
                 //goal_rot = RpyToRotMat(30*D2R, 0*D2R, 90*D2R);
                 C_err = goal_rot * start_rot.transpose();
-                a_axis = rotMatToAngleAxis(C_err);
+                a_axis = RotMatToAngleAxis(C_err);
                 joy_goal_cal = false;
             }
             AngleAxis command_a_axis = a_axis;
-            command_posi = func_1_cos(time, start_posi, goal_posi, T);
-            command_a_axis.th = func_1_cos(time, 0, a_axis.th, T);
+            command_posi = Func_1_cos(time, start_posi, goal_posi, T);
+            command_a_axis.th = Func_1_cos(time, 0, a_axis.th, T);
             cout << "\ncommand_a_axis.n = \n" << command_a_axis.n << endl;
             cout << "\ncommand_a_axis.th = " << command_a_axis.th*R2D << endl;
-            command_rot = start_rot * angleAxisToRotMat(command_a_axis);
+            command_rot = start_rot * AngleAxisToRotMat(command_a_axis);
 
-            q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
             q0 = q_command;
         }
         else if (time < T && phase == 1) {
@@ -1404,17 +1417,17 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
                 //goal_posi(Y_) -= 0.2;
                 goal_rot = MatrixXd::Identity(3, 3);
                 C_err = goal_rot * start_rot.transpose();
-                a_axis = rotMatToAngleAxis(C_err);
+                a_axis = RotMatToAngleAxis(C_err);
                 joy_goal_cal = false;
             }
             AngleAxis command_a_axis = a_axis;
-            command_posi = func_1_cos(time, start_posi, goal_posi, T);
-            command_a_axis.th = func_1_cos(time, 0, a_axis.th, T);
+            command_posi = Func_1_cos(time, start_posi, goal_posi, T);
+            command_a_axis.th = Func_1_cos(time, 0, a_axis.th, T);
             cout << "\ncommand_a_axis.n = \n" << command_a_axis.n << endl;
             cout << "\ncommand_a_axis.th = " << command_a_axis.th*R2D << endl;
-            command_rot = start_rot * angleAxisToRotMat(command_a_axis);
+            command_rot = start_rot * AngleAxisToRotMat(command_a_axis);
 
-            q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
             q0 = q_command;
         }
         else if (time >= T && phase == 0) {
@@ -1428,7 +1441,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             joy_goal_cal = true;
         }
         //command_rot = goal_rot;
-        //q_command = inverseKinematics(command_posi, command_rot, q0, 0.001);
+        //q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
         //q0 = q_command;
         //cout << "\nphase = " << phase << endl;
     }
@@ -1436,12 +1449,12 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     if (homing == 1) {
         T = 4.0;
         if (time < T) {
-            joint[J1].targetRadian = func_1_cos(time, q_init(0), q_goal(0), T);
-            joint[J2].targetRadian = func_1_cos(time, q_init(1), q_goal(1), T);
-            joint[J3].targetRadian = func_1_cos(time, q_init(2), q_goal(2), T);
-            joint[J4].targetRadian = func_1_cos(time, q_init(3), q_goal(3), T);
-            joint[J5].targetRadian = func_1_cos(time, q_init(4), q_goal(4), T);
-            joint[J6].targetRadian = func_1_cos(time, q_init(5), q_goal(5), T);
+            joint[J1].targetRadian = Func_1_cos(time, q_init(0), q_goal(0), T);
+            joint[J2].targetRadian = Func_1_cos(time, q_init(1), q_goal(1), T);
+            joint[J3].targetRadian = Func_1_cos(time, q_init(2), q_goal(2), T);
+            joint[J4].targetRadian = Func_1_cos(time, q_init(3), q_goal(3), T);
+            joint[J5].targetRadian = Func_1_cos(time, q_init(4), q_goal(4), T);
+            joint[J6].targetRadian = Func_1_cos(time, q_init(5), q_goal(5), T);
         }
         else if (time >= T) {
             joint[J1].targetRadian = q_goal(0);
@@ -1465,9 +1478,9 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     for (i = 0; i < nDoF; i++) {
         q_present(i) = joint[i].actualRadian;
     }
-    present_posi = jointToPosition(q_present);
-    present_rot = jointToRotMat(q_present);
-    cout << "\nEulerZYX = \n" << rotMatToEuler(present_rot) * R2D << endl;
+    present_posi = JointToPosition(q_present);
+    present_rot = JointToRotMat(q_present);
+    cout << "\nEulerZYX = \n" << RotMatToEuler(present_rot) * R2D << endl;
 
     /*
     //cout << "\nq_present = \n" << q_present * R2D << endl;
@@ -1477,11 +1490,11 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //cout << "\ncommand_position = \n" << command_posi << endl;
 
     cout << "\npresent_rotation = \n" << present_rot << endl;
-    cout << "\nEuler_matrix(deg) = \n" << rotMatToEuler(present_rot) * R2D << endl;
-    term_a_axis = rotMatToAngleAxis(present_rot);
+    cout << "\nEuler_matrix(deg) = \n" << RotMatToEuler(present_rot) * R2D << endl;
+    term_a_axis = RotMatToAngleAxis(present_rot);
     cout << "\nAngle_axis(n) = \n" << term_a_axis.n << endl;
     cout << "\nAngle_axis(th, deg) = \n" << term_a_axis.th * R2D << endl;
-    cout << "\nRotation_vector(Euler_vector) = \n" << rotMatToRotVec(present_rot) << endl;
+    cout << "\nRotation_vector(Euler_vector) = \n" << RotMatToRotVec(present_rot) << endl;
     */
 
     //* Joint Controller
@@ -1713,16 +1726,16 @@ void gazebo::drok4_plugin::SetJointPIDgain()
     joint[J1].Kp = 1500;
     joint[J2].Kp = 15000;//300;//200;//125;     //가장 부하가 많이 걸리는 관절
     joint[J3].Kp = 10000;//300;//200;//155;    //가장 부하가 많이 걸리는 관절 2
-    joint[J4].Kp = 50;//25;//15;
-    joint[J5].Kp = 150;//100;//25;//15;
-    joint[J6].Kp = 10;//10;
+    joint[J4].Kp = 50;//50;//25;//15;
+    joint[J5].Kp = 300;//150;//100;//25;//15;
+    joint[J6].Kp = 50;//10;
 
     joint[J1].Kd = 0.065;
     joint[J2].Kd = 80;//0.120;//0.300;//0.200;//0.130;
     joint[J3].Kd = 30;//0.135;//0.300;//0.200;//0.165;
-    joint[J4].Kd = 0.02;//0.020;
-    joint[J5].Kd = 0.05;//0.100;//0.010;
-    joint[J6].Kd = 0.005;//0.005;
+    joint[J4].Kd = 0.020;//0.020;
+    joint[J5].Kd = 0.300;//0.100;//0.010;
+    joint[J6].Kd = 0.025;//0.005;
 
 }
 
