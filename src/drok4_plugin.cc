@@ -132,14 +132,6 @@ MatrixXd C_err(3, 3);
 
 int subTime = 0, updateTime = 0;
 
-/*
-//Step
-double fb_step = 0.2;           //[m]
-double rl_turn = 30;            //[deg]
-double foot_height = 0.2;       //[m]
-double foot_distance = 0.105;   //distance from center
-*/
-
 namespace gazebo
 {
 
@@ -156,15 +148,10 @@ namespace gazebo
         int press[5] = { 0 };
         bool pressed[5] = { false };
         int joint_id = 0;
-        double joint_command = 0.0;
-        //bool joint_select[6] = {false};
         //double P_coeff = 1, D_coeff = 1;
 
-        int homing = 1;
+        int ctrl_mode = 0;
         bool goal_cal_once = true;
-        bool rot_control = false;
-        bool man_control = false;
-        //bool joy_goal_cal = true;
         //bool arrived = true;
 
         //* Model & Link & Joint Typedefs
@@ -271,46 +258,38 @@ void gazebo::drok4_plugin::JoyCallback(const sensor_msgs::Joy::ConstPtr &msg)
     {
         if (abs(prev_press[i]) == 1 && prev_press[i] * press[i] == 0) {
             pressed[i] = true;
-            q_goal = q_command;
         }
+        if (time < T) pressed[i] = false;
     }
 
-    if (pressed[0] == true)
-    {
-        //X, Joystick position control button
-        pressed[3] = false;
-        homing = -1;
-        rot_control = false;
-        man_control = false;
-        pressed[0] = false;
-    }
-    else if (pressed[1] == true)
+    if (pressed[1] == true)
     {
         //O, Home positioning button
         pressed[3] = false;
-        homing = 1;
-        time = 0;
+        ctrl_mode = 0;      //Home positioning
+        time = 0.0;
         goal_cal_once = true;
-        rot_control = false;
-        man_control = false;
         pressed[1] = false;
+    }
+    else if (pressed[0] == true)
+    {
+        //X, Joystick position control button
+        pressed[3] = false;
+        ctrl_mode = 1;      //E-e position ctrl
+        pressed[0] = false;
     }
     else if (pressed[2] == true)
     {
         //Triangle, Joystick rotation control button
-
         pressed[3] = false;
-        homing = -1;
-        rot_control = true;
-        man_control = false;
+        ctrl_mode = 2;      //E-e orientation ctrl
         pressed[2] = false;
     }
     else if (pressed[3] == true)
     {
         //Square, Manual joint control button (Joystick)
-        homing = -1;
-        rot_control = false;
-        man_control = true;
+        ctrl_mode = 3;      //Manual ctrl
+        goal_cal_once = true;
         if (pressed[4] == true && press[4] > 0) {
             if (joint_id == 5) joint_id = 0;
             else joint_id++;
@@ -325,31 +304,27 @@ void gazebo::drok4_plugin::JoyCallback(const sensor_msgs::Joy::ConstPtr &msg)
         }
     }
 
-    if (man_control == false && rot_control == false)
+    if (ctrl_mode == 1)
     {
         joy.x = msg->axes[1] * 0.0005;
         joy.y = msg->axes[0] * -0.0005;
         joy.z = msg->axes[4] * 0.0005;
     }
-    else if (man_control == false && rot_control == true)
+    else if (ctrl_mode == 2)
     {
         joy.x = msg->axes[1] * 0.05 * D2R;
         joy.y = msg->axes[0] * -0.05 * D2R;
         joy.z = msg->axes[4] * 0.05 * D2R;
     }
-    else if (man_control == true)
+    else if (ctrl_mode == 3)
     {
-        joint_command = msg->axes[4] * 0.01 * D2R;
+        joy.z = msg->axes[4] * 0.01 * D2R;
     }
 
     memcpy(prev_press, press, sizeof (prev_press));
     //cout << "\npressed = " << pressed[0] << '\t' << pressed[1] << '\t' << pressed[2]
     //     << '\t' << pressed[3] << '\t' << pressed[4] << endl;
     //cout << "\njoint_id = " << joint_id << endl;
-    //cout << "homing = " << homing << endl;
-    //if (updateTime == 0)
-    //    subTime += 1;
-    //cout << "\nsubTime = " << subTime << endl;
 }
 
 //------------------------------------------------------------//
@@ -476,37 +451,10 @@ VectorXd RotMatToRotVec(MatrixXd C)
     return phi;
 }
 
-/*
-void RpyToQuaternion(void)
-{
-    using namespace Eigen;
-    double roll, pitch, yaw;
-    roll = 90 * D2R;
-    pitch = 45 * D2R;
-    yaw = -90 * D2R;
-
-    AngleAxisd rollAngle(roll, Eigen::Vector3d::UnitX());
-    AngleAxisd pitchAngle(pitch, Eigen::Vector3d::UnitY());
-    AngleAxisd yawAngle(yaw, Eigen::Vector3d::UnitZ());
-
-    Quaterniond quat1 = yawAngle * pitchAngle * rollAngle;
-    Quaterniond quat2 = rollAngle * pitchAngle * yawAngle;
-
-    cout << "\nq(deg) = (" << roll*R2D << ", " << pitch*R2D << ", " << yaw*R2D << ")" << endl;
-    cout << "q(rad) = (" << roll << ", " << pitch << ", " << yaw << ")" << endl;
-    cout << "\nYPR Quaternion Coeffs = \n" << quat1.coeffs() << endl;
-    cout << "\nYPR Rotation matrix = \n" << quat1.toRotationMatrix() << endl;
-    cout << "\nRPY Quaternion Coeffs = \n" << quat2.coeffs() << endl;
-    cout << "\nRPY Rotation matrix = \n" << quat2.toRotationMatrix() << endl;
-    cout << "\nEulerZyxToRotMat = \n" << EulerZyxToRotMat(yaw, pitch, roll) << endl;
-}
-*/
-
 //------------------------------------------------------------//
 // Practice 2. Forward Kinematics (fuction declaration)
 // 1, 2, 5, 6번 관절은 음의 축방향으로 회전한다.
 //------------------------------------------------------------//
-
 MatrixXd GetTransformI0(void)
 {
     //Global frame to base link frame
@@ -1169,7 +1117,7 @@ void gazebo::drok4_plugin::Load(physics::ModelPtr _model, sdf::ElementPtr /*_sdf
     //joySub = nh.subscribe("joy", 1000, JoyCallback);
     
     //* Kinematics Test
-    Examination();
+   /// Examination();
     //RpyToQuaternion();
 
     //* ROS publishers
@@ -1221,9 +1169,10 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //--------------------------------------------------//
 
     int i;
-    if (homing == 1 && goal_cal_once == true)
+    if (ctrl_mode == 0 && goal_cal_once == true)
     {
-        T = 4;
+        // Home positioning //
+        T = 4.0;
         if (phase == 0) {
             goal_posi << 0.7, 0, 0.8;
             goal_rot = MatrixXd::Identity(3, 3);
@@ -1234,76 +1183,61 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         q0 = q_goal;
         goal_cal_once = false;
     }
-    else if (homing == -1)
+    else if (ctrl_mode == 1)
     {
-        if (man_control == false && rot_control == false) {
-            //Position control
-            start_posi = goal_posi;
-            start_rot = goal_rot;
-            goal_posi(X_) = start_posi(X_) + joy.x;
-            goal_posi(Y_) = start_posi(Y_) + joy.y;
-            goal_posi(Z_) = start_posi(Z_) + joy.z;
-            command_posi = goal_posi;
-            command_rot = goal_rot;
-            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
-            q0 = q_command;
-            /*
-            T = 50 * 0.001;
-            if (time < T) {
-                if (joy_goal_cal == true) {
-                    start_posi = goal_posi;
-                    start_rot = goal_rot;
-                    goal_posi(_X) = start_posi(_X) + joy.x;
-                    goal_posi(_Y) = start_posi(_Y) + joy.y;
-                    goal_posi(_Z) = start_posi(_Z) + joy.z;
-                    joy_goal_cal = false;
-                }
-                command_posi = Func_1_cos(start_posi, goal_posi, time, T);
-                command_rot = goal_rot;
-                q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
-                q0 = q_command;
-            }
-            else if (time >= T) {
-                time = 0;
-                phase ++;
-                joy_goal_cal = true;
-            }
-            */
+        // Position control //
+        start_posi = goal_posi;
+        start_rot = goal_rot;
+        goal_posi(X_) = start_posi(X_) + joy.x;
+        goal_posi(Y_) = start_posi(Y_) + joy.y;
+        goal_posi(Z_) = start_posi(Z_) + joy.z;
+        if (sqrt(pow(goal_posi(X_), 2) + pow(goal_posi(Y_), 2)) < 0.25) {
+            // Position inner limint examination, r = 0.35 m //
+            goal_posi(X_) = start_posi(X_);
+            goal_posi(Y_) = start_posi(Y_);
         }
-        else if (man_control == false && rot_control == true) {
-            //Rotation control
-            start_posi = goal_posi;
-            start_rot = goal_rot;
-            Vector3d temp_Euler;
-            temp_Euler = RotMatToEulerZyx(start_rot);
-            ori.roll = temp_Euler(2) + joy.x;
-            ori.pitch = temp_Euler(1) + joy.y;
-            ori.yaw = temp_Euler(0) + joy.z;
-            //ori.roll += joy.x;
-            //ori.pitch += joy.y;
-            //ori.yaw += joy.z;
-            goal_rot = EulerZyxToRotMat(ori.yaw, ori.pitch, ori.roll);
-            //goal_rot = RpyToRotMat(ori.roll, ori.pitch, ori.yaw);
-            //C_err = goal_rot * start_rot.transpose();
-            //a_axis = RotMatToAngleAxis(C_err);
-            command_posi = goal_posi;
-            command_rot = goal_rot;
-            //command_rot = start_rot * AngleAxisToRotMat(a_axis);
-            q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
-            q0 = q_command;
+        command_posi = goal_posi;
+        command_rot = goal_rot;
+        q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
+        q0 = q_command;
+    }
+    else if (ctrl_mode == 2)
+    {
+        // Rotation control //
+        start_posi = goal_posi;
+        start_rot = goal_rot;
+        Vector3d temp_Euler;
+        temp_Euler = RotMatToEulerZyx(start_rot);
+        ori.roll = temp_Euler(2) + joy.x;
+        ori.pitch = temp_Euler(1) + joy.y;
+        ori.yaw = temp_Euler(0) + joy.z;
+        goal_rot = EulerZyxToRotMat(ori.yaw, ori.pitch, ori.roll);
+        //goal_rot = RpyToRotMat(ori.roll, ori.pitch, ori.yaw);
+        //C_err = goal_rot * start_rot.transpose();
+        //a_axis = RotMatToAngleAxis(C_err);
+        command_posi = goal_posi;
+        command_rot = goal_rot;
+        //command_rot = start_rot * AngleAxisToRotMat(a_axis);
+        q_command = InverseKinematics(command_posi, command_rot, q0, 0.001);
+        q0 = q_command;
+    }
+    else if (ctrl_mode == 3)
+    {
+        if (goal_cal_once == true) {
+            q_goal = q_command;
+            goal_cal_once = false;
         }
-        else if (man_control == true) {
-            cout << "Manual joint control : Joint " << joint_id + 1 << endl;
-            //q_goal = q_command;
-            q_goal(joint_id) += joint_command;
-            goal_posi = JointToPosition(q_goal);
-            goal_rot = JointToRotMat(q_goal);
-            q_command = q_goal;
-            q0 = q_command;
-        }
+        cout << "Manual joint control : Joint " << joint_id + 1 << endl;
+        //q_goal = q_command;
+        q_goal(joint_id) += joy.z;
+        goal_posi = JointToPosition(q_goal);
+        goal_rot = JointToRotMat(q_goal);
+        q_command = q_goal;
+        q0 = q_command;
     }
 
-    if (homing == 1) {
+    if (ctrl_mode == 0)
+    {
         T = 4.0;
         if (time < T) {
             joint[J1].targetRadian = Func_1_cos(q_init(0), q_goal(0), time, T);
@@ -1320,10 +1254,22 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             joint[J4].targetRadian = q_goal(3);
             joint[J5].targetRadian = q_goal(4);
             joint[J6].targetRadian = q_goal(5);
+            q_init = q_goal;
             q_command = q_goal;
         }
     }
-    else if (homing == -1) {
+    else
+    {
+        VectorXd q_exam(6);
+        q_exam = q_command - q_present;
+        if (fabs(q_exam(J6)) > 5 * D2R || fabs(q_exam(J5)) > 5 * D2R ||
+                fabs(q_exam(J4)) > 5 * D2R || fabs(q_exam(J3) > 5 * D2R) ||
+                fabs(q_exam(J2)) > 5 * D2R || fabs(q_exam(J1) > 5 * D2R))
+        {
+            q_command = q_present;
+            goal_posi = JointToPosition(q_command);
+            goal_rot = JointToRotMat(q_command);
+        }
         joint[J1].targetRadian = q_command(0);
         joint[J2].targetRadian = q_command(1);
         joint[J3].targetRadian = q_command(2);
@@ -1333,6 +1279,8 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         q_init = q_command;
     }
 
+    if (ctrl_mode == 3)
+        cout << "\nq_command = \n" << q_command << endl;
 
     //--------------------------------------------------//
     // Joint space -> Task space Control
@@ -1344,7 +1292,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     //int i;
 
     /*
-    if (homing == 1 && goal_cal_once == true)
+    if (ctrl_mode == 0 && goal_cal_once == true)
     {
         if (phase == 0) {
             goal_posi << 0.4, 0, 0.8;//0.7, 0, 0.8;
@@ -1363,7 +1311,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
             goal_cal_once = false;
         }
     }
-    else if (homing == -1)
+    else if (ctrl_mode != 0)
     {
         if (time < T && phase == 0) {
             if (joy_goal_cal == true) {
@@ -1453,26 +1401,24 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
     */
 
     for (i = 0; i < nDoF; i++) {
-        q_present(i) = joint[i].actualRadian;
+        q_present(i) = joint[i].targetRadian;
     }
     present_posi = JointToPosition(q_present);
     present_rot = JointToRotMat(q_present);
-    cout << "\nEulerZYX = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
+    //cout << "\nEulerZYX = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
 
-    /*
     //cout << "\nq_present = \n" << q_present * R2D << endl;
-    cout << "\nstart_position = \n" << start_posi << endl;
-    cout << "\ngoal_position = \n" << goal_posi << endl;
-    cout << "\npresent_position = \n" << present_posi << endl;
+    //cout << "\nstart_position = \n" << start_posi << endl;
+    //cout << "\ngoal_position = \n" << goal_posi << endl;
+    //cout << "\npresent_position = \n" << present_posi << endl;
     //cout << "\ncommand_position = \n" << command_posi << endl;
 
-    cout << "\npresent_rotation = \n" << present_rot << endl;
-    cout << "\nEuler_matrix(deg) = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
-    term_a_axis = RotMatToAngleAxis(present_rot);
-    cout << "\nAngle_axis(n) = \n" << term_a_axis.n << endl;
-    cout << "\nAngle_axis(th, deg) = \n" << term_a_axis.th * R2D << endl;
-    cout << "\nRotation_vector(Euler_vector) = \n" << RotMatToRotVec(present_rot) << endl;
-    */
+    //cout << "\npresent_rotation = \n" << present_rot << endl;
+    //cout << "\nEuler_matrix(deg) = \n" << RotMatToEulerZyx(present_rot) * R2D << endl;
+    //term_a_axis = RotMatToAngleAxis(present_rot);
+    //cout << "\nAngle_axis(n) = \n" << term_a_axis.n << endl;
+    //cout << "\nAngle_axis(th, deg) = \n" << term_a_axis.th * R2D << endl;
+    //cout << "\nRotation_vector(Euler_vector) = \n" << RotMatToRotVec(present_rot) << endl;
 
     //* Joint Controller
     jointController();
