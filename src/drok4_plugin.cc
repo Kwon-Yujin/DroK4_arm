@@ -1191,7 +1191,7 @@ void gazebo::drok4_plugin::UpdateAlgorithm()
         goal_posi(X_) = start_posi(X_) + joy.x;
         goal_posi(Y_) = start_posi(Y_) + joy.y;
         goal_posi(Z_) = start_posi(Z_) + joy.z;
-        if (sqrt(pow(goal_posi(X_), 2) + pow(goal_posi(Y_), 2)) < 0.25) {
+        if (sqrt(pow(goal_posi(X_), 2) + pow(goal_posi(Y_), 2)) < 0.30) {
             // Position inner limint examination, r = 0.35 m //
             goal_posi(X_) = start_posi(X_);
             goal_posi(Y_) = start_posi(Y_);
