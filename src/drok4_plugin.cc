@@ -9,6 +9,8 @@
  * 
  * ======
  * Update date : 2022.03.16 by Yunho Han
+ * Changed for 6-DoF Robot manipulator control
+ * Last update date : 2022.10.08 by Yujin Kwon
  * ======
  */
 //* Header file for C++
